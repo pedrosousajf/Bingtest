@@ -1,53 +1,45 @@
 from playwright.sync_api import sync_playwright
-import os
-import json
+import time
 
 
-SESSAO_DIR = "sessions"
-os.makedirs(SESSAO_DIR, exist_ok=True)
-
-
-def salvar_cookies(context, nome_arquivo):
-    cookies = context.storage_state()
-    with open(os.path.join(SESSAO_DIR, nome_arquivo), "w") as f:
-        json.dump(cookies, f)
-
-
-def carregar_cookies(browser, nome_arquivo):
-    caminho = os.path.join(SESSAO_DIR, nome_arquivo)
-    if os.path.exists(caminho):
-        return browser.new_context(storage_state=caminho)
-    else:
-        return browser.new_context()
-
-
-def baixar_html_prova(email, senha, id_prova, nome_sessao="sessao_gran.json"):
+def baixar_html_prova(email, senha, id_prova):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = carregar_cookies(browser, nome_sessao)
+        browser = p.chromium.launch(headless=False)  # Coloca True se quiser rodar sem abrir o navegador
+        context = browser.new_context()
         page = context.new_page()
 
-        # Testa se já tá logado
-        page.goto("https://backoffice-questoes.grancursosonline.com.br/")
-        if "Entrar" in page.content():
-            # Se não tá logado, faz login
-            page.goto("https://conta.grancursosonline.com.br/login")
+        # Acessa a página de login
+        page.goto("https://conta.grancursosonline.com.br/login")
 
-            page.fill('input[name="email"]', email)
-            page.fill('input[name="password"]', senha)
-            page.click('button:has-text("Entrar")')
+        # Preenche e-mail
+        page.locator('input[name="email"]').fill(email)
 
-            page.wait_for_timeout(5000)
+        # Preenche senha
+        page.locator('input[name="password"]').fill(senha)
 
-            salvar_cookies(context, nome_sessao)
+        # Clica no botão Entrar
+        page.locator('button:has-text("Entrar")').click()
 
-        # Acessa a prova
+        # Aguarda o login completar
+        page.wait_for_timeout(5000)  # Você pode ajustar ou melhorar isso com um wait mais inteligente
+
+        # Vai pra página da prova no backoffice
         url_prova = f"https://backoffice-questoes.grancursosonline.com.br/insercao/cadastro/prova/provas/gabarito/form/{id_prova}"
         page.goto(url_prova)
 
+        # Espera a página carregar completamente
         page.wait_for_load_state("networkidle")
+        time.sleep(2)  # Margem extra de segurança
 
+        # Captura o HTML
         html_content = page.content()
 
+        # Salva localmente
+        with open(f"prova_{id_prova}.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        print(f"✅ HTML da prova {id_prova} baixado com sucesso!")
+
         browser.close()
+
         return html_content
