@@ -1,44 +1,34 @@
 from playwright.sync_api import sync_playwright
-import time
 
 
 def baixar_html_prova(email, senha, id_prova):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)  # Coloca True se quiser rodar sem abrir o navegador
+        browser = p.chromium.launch(headless=True)  # ✅ Headless obrigatório no Streamlit Cloud
         context = browser.new_context()
         page = context.new_page()
 
-        # Acessa a página de login
+        # 🔐 Login
         page.goto("https://conta.grancursosonline.com.br/login")
-
-        # Preenche e-mail
         page.locator('input[name="email"]').fill(email)
-
-        # Preenche senha
         page.locator('input[name="password"]').fill(senha)
 
-        # Clica no botão Entrar
-        page.locator('button:has-text("Entrar")').click()
+        # ✅ Clicar no botão correto (não no login via Microsoft/AD)
+        page.get_by_role("button", name="Entrar", exact=True).click()
 
-        # Aguarda o login completar
-        page.wait_for_timeout(5000)  # Você pode ajustar ou melhorar isso com um wait mais inteligente
+        # 🔄 Aguarda o redirecionamento
+        page.wait_for_timeout(5000)  # Pode trocar por waits mais inteligentes depois
 
-        # Vai pra página da prova no backoffice
+        # 🌐 Acessa a página da prova
         url_prova = f"https://backoffice-questoes.grancursosonline.com.br/insercao/cadastro/prova/provas/gabarito/form/{id_prova}"
         page.goto(url_prova)
 
-        # Espera a página carregar completamente
         page.wait_for_load_state("networkidle")
-        time.sleep(2)  # Margem extra de segurança
 
-        # Captura o HTML
+        # 📄 Captura o HTML
         html_content = page.content()
 
-        # Salva localmente
         with open(f"prova_{id_prova}.html", "w", encoding="utf-8") as f:
             f.write(html_content)
-
-        print(f"✅ HTML da prova {id_prova} baixado com sucesso!")
 
         browser.close()
 
