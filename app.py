@@ -1,16 +1,18 @@
 import streamlit as st
 from playwright_login import baixar_html_prova
 import os
-import traceback
 
-# Instala navegador se não estiver instalado
-if not os.path.exists("/home/appuser/.cache/ms-playwright"):
-    os.system("playwright install chromium")
-st.set_page_config(page_title="Conferência de Gabarito - HTML", layout="centered")
 
-st.title("📥 Downloader de HTML da Prova - Gran Backoffice")
+st.set_page_config(page_title="📥 Downloader de HTML - Gran", layout="centered")
 
+st.title("📥 Downloader de HTML da Prova - Backoffice Gran")
 st.info("⚠️ Faça login no Gran Conta. A sessão será salva para acessos futuros.")
+
+# 🔥 Variáveis para controle do estado
+if 'html' not in st.session_state:
+    st.session_state.html = None
+    st.session_state.file_name = None
+
 
 with st.form("formulario"):
     email = st.text_input("Seu E-mail Gran", type="default")
@@ -33,14 +35,19 @@ with st.form("formulario"):
 
                     st.success(f"✅ HTML da prova {id_prova} baixado com sucesso!")
 
-                    with open(file_name, "rb") as f:
-                        st.download_button(
-                            label="📄 Baixar HTML",
-                            data=f,
-                            file_name=file_name,
-                            mime="text/html",
-                        )
+                    # Salva no estado para download fora do form
+                    st.session_state.html = html
+                    st.session_state.file_name = file_name
 
                 except Exception as e:
                     st.error(f"❌ Ocorreu um erro: {e}")
-                    st.exception(traceback.format_exc())
+
+# 🔥 🔥 🔥 BOTÃO DE DOWNLOAD FORA DO FORM 🔥 🔥 🔥
+if st.session_state.html:
+    with open(st.session_state.file_name, "rb") as f:
+        st.download_button(
+            label="📄 Baixar HTML",
+            data=f,
+            file_name=st.session_state.file_name,
+            mime="text/html",
+        )
