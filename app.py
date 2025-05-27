@@ -3,6 +3,9 @@ from playwright_login import baixar_html_prova
 import os
 import traceback
 
+# Instala navegador se não estiver instalado
+if not os.path.exists("/home/appuser/.cache/ms-playwright"):
+    os.system("playwright install chromium"
 st.set_page_config(page_title="Conferência de Gabarito - HTML", layout="centered")
 
 st.title("📥 Downloader de HTML da Prova - Gran Backoffice")
