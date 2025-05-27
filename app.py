@@ -1,53 +1,45 @@
-import streamlit as st
-from playwright_login import baixar_html_prova
-import os
+from playwright.sync_api import sync_playwright
+import time
 
 
-st.set_page_config(page_title="📥 Downloader de HTML - Gran", layout="centered")
+def baixar_html_prova(email, senha, id_prova):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)  # Coloca True se quiser rodar sem abrir o navegador
+        context = browser.new_context()
+        page = context.new_page()
 
-st.title("📥 Downloader de HTML da Prova - Backoffice Gran")
-st.info("⚠️ Faça login no Gran Conta. A sessão será salva para acessos futuros.")
+        # Acessa a página de login
+        page.goto("https://conta.grancursosonline.com.br/login")
 
-# 🔥 Variáveis para controle do estado
-if 'html' not in st.session_state:
-    st.session_state.html = None
-    st.session_state.file_name = None
+        # Preenche e-mail
+        page.locator('input[name="email"]').fill(email)
 
+        # Preenche senha
+        page.locator('input[name="password"]').fill(senha)
 
-with st.form("formulario"):
-    email = st.text_input("Seu E-mail Gran", type="default")
-    senha = st.text_input("Sua Senha Gran", type="password")
-    id_prova = st.text_input("ID da Prova (número que aparece no link)", placeholder="Ex: 192414")
+        # Clica no botão Entrar
+        page.locator('button:has-text("Entrar")').click()
 
-    submitted = st.form_submit_button("🔽 Baixar HTML da Prova")
+        # Aguarda o login completar
+        page.wait_for_timeout(5000)  # Você pode ajustar ou melhorar isso com um wait mais inteligente
 
-    if submitted:
-        if not email or not senha or not id_prova:
-            st.error("❌ Preencha todos os campos.")
-        else:
-            with st.spinner("🔐 Fazendo login e acessando a prova..."):
-                try:
-                    html = baixar_html_prova(email, senha, id_prova)
+        # Vai pra página da prova no backoffice
+        url_prova = f"https://backoffice-questoes.grancursosonline.com.br/insercao/cadastro/prova/provas/gabarito/form/{id_prova}"
+        page.goto(url_prova)
 
-                    file_name = f"prova_{id_prova}.html"
-                    with open(file_name, "w", encoding="utf-8") as f:
-                        f.write(html)
+        # Espera a página carregar completamente
+        page.wait_for_load_state("networkidle")
+        time.sleep(2)  # Margem extra de segurança
 
-                    st.success(f"✅ HTML da prova {id_prova} baixado com sucesso!")
+        # Captura o HTML
+        html_content = page.content()
 
-                    # Salva no estado para download fora do form
-                    st.session_state.html = html
-                    st.session_state.file_name = file_name
+        # Salva localmente
+        with open(f"prova_{id_prova}.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
 
-                except Exception as e:
-                    st.error(f"❌ Ocorreu um erro: {e}")
+        print(f"✅ HTML da prova {id_prova} baixado com sucesso!")
 
-# 🔥 🔥 🔥 BOTÃO DE DOWNLOAD FORA DO FORM 🔥 🔥 🔥
-if st.session_state.html:
-    with open(st.session_state.file_name, "rb") as f:
-        st.download_button(
-            label="📄 Baixar HTML",
-            data=f,
-            file_name=st.session_state.file_name,
-            mime="text/html",
-        )
+        browser.close()
+
+        return html_content
