@@ -4,7 +4,7 @@ import time
 
 def baixar_html_prova(email, senha, id_prova):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # Coloca True se quiser rodar sem abrir o navegador
+        browser = p.chromium.launch(headless=True)  # Coloca True se quiser rodar sem abrir o navegador
         context = browser.new_context()
         page = context.new_page()
 
