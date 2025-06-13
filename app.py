@@ -1,53 +1,74 @@
 import streamlit as st
-from playwright_login import baixar_html_prova
-import os
+import pandas as pd
+from backoffice_parser import parse_gabarito_backoffice
+from gemini_parser import parse_gabarito_gemini
+from gemini_vision_parser import extrair_gabarito_de_imagem
 
 
-st.set_page_config(page_title="📥 Downloader de HTML - Gran", layout="centered")
-
-st.title("📥 Downloader de HTML da Prova - Backoffice Gran")
-st.info("⚠️ Faça login no Gran Conta. A sessão será salva para acessos futuros.")
-
-# 🔥 Variáveis para controle do estado
-if 'html' not in st.session_state:
-    st.session_state.html = None
-    st.session_state.file_name = None
+# 🔥 Configuração
+st.set_page_config(page_title="📄 Conferência de Gabaritos", layout="wide")
+st.title("📄 Conferência de Gabaritos — Backoffice x Banca")
 
 
-with st.form("formulario"):
-    email = st.text_input("Seu E-mail Gran", type="default")
-    senha = st.text_input("Sua Senha Gran", type="password")
-    id_prova = st.text_input("ID da Prova (número que aparece no link)", placeholder="Ex: 192414")
+api_key = st.sidebar.text_input("🔑 API KEY do Gemini", type="password")
 
-    submitted = st.form_submit_button("🔽 Baixar HTML da Prova")
+st.subheader("🔹 Gabarito do Backoffice")
+gabarito_html = st.text_area("📋 Cole aqui o HTML copiado do Backoffice", height=300)
 
-    if submitted:
-        if not email or not senha or not id_prova:
-            st.error("❌ Preencha todos os campos.")
+st.subheader("🔸 Gabarito da Banca")
+metodo = st.radio("Escolha o método de inserção:", ["📝 Texto da Banca", "🖼️ Imagem da Banca"])
+
+texto_banca = ""
+imagem_banca = None
+
+if metodo == "📝 Texto da Banca":
+    texto_banca = st.text_area("Cole aqui o texto do gabarito oficial", height=300)
+else:
+    imagem_banca = st.file_uploader("🔽 Envie a imagem do gabarito (PNG, JPG)", type=["png", "jpg", "jpeg"])
+
+
+if st.button("🚀 Iniciar Conferência"):
+    try:
+        if not api_key:
+            st.error("🔑 Insira sua API KEY para continuar.")
+            st.stop()
+
+        # 🔥 Processar gabarito do Backoffice
+        df_back = parse_gabarito_backoffice(gabarito_html)
+
+        # 🔥 Processar gabarito da banca (texto ou imagem)
+        if metodo == "📝 Texto da Banca":
+            if not texto_banca.strip():
+                st.error("⚠️ Texto do gabarito da banca não inserido.")
+                st.stop()
+            df_banca = parse_gabarito_gemini(texto_banca, api_key=api_key)
         else:
-            with st.spinner("🔐 Fazendo login e acessando a prova..."):
-                try:
-                    html = baixar_html_prova(email, senha, id_prova)
+            if not imagem_banca:
+                st.error("⚠️ Imagem do gabarito da banca não enviada.")
+                st.stop()
+            df_banca = extrair_gabarito_de_imagem(imagem_banca, api_key=api_key)
 
-                    file_name = f"prova_{id_prova}.html"
-                    with open(file_name, "w", encoding="utf-8") as f:
-                        f.write(html)
-
-                    st.success(f"✅ HTML da prova {id_prova} baixado com sucesso!")
-
-                    # Salva no estado para download fora do form
-                    st.session_state.html = html
-                    st.session_state.file_name = file_name
-
-                except Exception as e:
-                    st.error(f"❌ Ocorreu um erro: {e}")
-
-# 🔥 🔥 🔥 BOTÃO DE DOWNLOAD FORA DO FORM 🔥 🔥 🔥
-if st.session_state.html:
-    with open(st.session_state.file_name, "rb") as f:
-        st.download_button(
-            label="📄 Baixar HTML",
-            data=f,
-            file_name=st.session_state.file_name,
-            mime="text/html",
+        # 🔥 Comparação
+        df_comparado = pd.merge(df_back, df_banca, on='questao', how='outer')
+        df_comparado['resultado'] = df_comparado.apply(
+            lambda row: '✔️ OK' if row['alternativa_back'].strip().upper() == row['alternativa_banca'].strip().upper()
+            else '❌ Divergente',
+            axis=1
         )
+
+        # 🔥 Organizar a ordem das colunas
+        df_comparado = df_comparado[['id', 'questao', 'alternativa_back', 'alternativa_banca', 'resultado']]
+
+        st.subheader("🔍 Resultado da Conferência")
+        st.dataframe(df_comparado)
+
+        csv = df_comparado.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Baixar Resultado como CSV",
+            data=csv,
+            file_name="conferencia_gabarito.csv",
+            mime="text/csv"
+        )
+
+    except Exception as e:
+        st.error(f"❌ Erro ao processar: {e}")
